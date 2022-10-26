@@ -18,9 +18,9 @@ library(data.table)
 library(fixest)
 library(ggiplot)
 library(gridExtra)
-api_key <- read.csv("api_keys")[1]
+census_key <- read.csv("api_keys")[1]
 map_key <- read.csv("api_keys")[2]
-census_api_key(api_key)
+census_api_key(census_key)
 register_google(map_key)
 
 ###-------------------------------------------------
@@ -28,7 +28,6 @@ register_google(map_key)
 ###-------------------------------------------------
 
 # Crosswalk converts 2000 PUMAs to their corresponding 2010 PUMA
-
 crosswalk = function(data,cross,date){
   if(date < 2012) {
     cross_temp = cross %>% 
@@ -61,7 +60,6 @@ crosswalk = function(data,cross,date){
 }
 
 # This function is to match asynchromous age defintions across datasets
-
 check_age = function(data,ages){
   age_bin = rep("",length(data))
   for(j in 1:length(data)){
@@ -118,7 +116,6 @@ acs1_puma_pull = function(codes,year_start,year_end,state,crosswalk_file,na_chec
 se_robust <- function(x){
   coeftest(x, vcov = vcovHC, type = "HC1")[, "Std. Error"]
 }
-
 
 # Create valid lists to pull ACS data to per race
 generate_race_list = function(fine_age_bins = FALSE, janky = FALSE){
