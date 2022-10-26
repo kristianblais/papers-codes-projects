@@ -1,3 +1,7 @@
+###-------------------------------------------------
+#- Load Packages from Library and Register API Keys
+###-------------------------------------------------
+
 library(tidycensus)
 library(tidyverse)
 library(sp)
@@ -18,6 +22,10 @@ api_key <- read.csv("api_keys")[1]
 map_key <- read.csv("api_keys")[2]
 census_api_key(api_key)
 register_google(map_key)
+
+###-------------------------------------------------
+#- Define Custom Functions
+###-------------------------------------------------
 
 # Crosswalk converts 2000 PUMAs to their corresponding 2010 PUMA
 
@@ -166,7 +174,9 @@ generate_race_list = function(fine_age_bins = FALSE, janky = FALSE){
   }
 }
 
-### The following sections definies all the codes for the data that we wish to extract
+###-------------------------------------------------
+#- Define static lists and variables
+###-------------------------------------------------
 
 # ACS Codes for female labor force participation rate by age bracket
 lf_vars_byagesex = c(
@@ -369,9 +379,10 @@ msa_states = c("GA",
                "WV")
 
 
-###
-### Begin loading and cleaning relevant data
-###
+
+###-------------------------------------------------
+#- Import and Transform Spatial-Coded Data
+###-------------------------------------------------
 
 # Load crosswalk file to convert old PUMA definitions to 2020 versions
 puma_crosswalk <- read_csv("PUMA2000_PUMA2010_crosswalk.csv")
@@ -431,24 +442,26 @@ puma_map_seatac = seatac_csa %>%
             has_station_p1 = (sum(phase_1,na.rm=TRUE)>0),
             has_station_p2 = (sum(phase_2,na.rm=TRUE)>0))
 
-## BEGIN LOADING IN AND CLEANING DATA FROM THE 1-YEAR ACS AT PUMA LEVEL ##
+###-------------------------------------------------
+#- Begin Loading and Cleaning Data from 1-year ACS
+###-------------------------------------------------
 
 # Load labor force indicators by race, and age, and sex
 raw_emp_sex_age = acs1_puma_pull(lf_vars_byagesex,2005,2019,c("WA"),puma_crosswalk)
 emp_sex_age = raw_emp_sex_age %>% 
-  mutate(inorout = if_else(grepl("ni",variable),"nilf","lf"),
-         sex = ifelse(grepl("m",variable),"m","f"),
-         age = check_age(variable,age_bin_list)) %>% 
+  mutate(inorout = if_else(grepl("ni",variable),"nilf","lf"), # Number of people in and out of LF in a given PUMA
+         sex = ifelse(grepl("m",variable),"m","f"), # Number of people of each sex in a PUMA
+         age = check_age(variable,age_bin_list)) %>% # Number of people within each age bin in a PUMA
   pivot_wider(names_from = inorout,values_from = c(estimate,moe)) %>% 
   group_by(GEOID,year,age,sex) %>% 
-  summarise(
+  summarise(                                       # Summarize function removes empty values from our pivot 
     estimate_lf = sum(estimate_lf,na.rm = TRUE),
     moe_lf = sum(moe_lf,na.rm = TRUE),
     estimate_nilf = sum(estimate_nilf,na.rm = TRUE),
     moe_nilf = sum(moe_nilf,na.rm = TRUE)
   ) %>% 
-  mutate(
-    age_lowerbound = as.numeric(substr(age,1,2)),
+  mutate( 
+    age_lowerbound = as.numeric(substr(age,1,2)), # Turns age range to a single number (lowest age of said range)
     estimate_pop = estimate_lf + estimate_nilf,
     moe_pop = moe_lf + moe_nilf,
     lfpr = estimate_lf/(estimate_lf+estimate_nilf)
@@ -636,7 +649,6 @@ data_reg1 = emp_seattle %>%
   left_join(filter(hours_sex, sex =="f"), by = c("GEOID", "year")) %>% 
   mutate(hours_per_capita =estimate_hoursworked/estimate_total) %>% 
   left_join(unemp_seattle_men, by = c("GEOID","year")) %>% 
-  #left_join(select(rename(filter(st_drop_geometry(emp_seattle), sex == "m"),male_lfpr = lfpr),c("GEOID","year","male_lfpr"))) %>%
   select(-c(Name,sex.x,sex.y)) %>% 
   filter(!is.na(lfpr))
 
@@ -652,7 +664,6 @@ data_reg_seniors = emp_seattle_seniors %>%
   left_join(filter(hours_sex, sex =="f"), by = c("GEOID", "year")) %>% 
   mutate(hours_per_capita =estimate_hoursworked/estimate_total) %>% 
   left_join(unemp_seattle_men, by = c("GEOID","year")) %>% 
-  #left_join(select(rename(filter(st_drop_geometry(emp_seattle), sex == "m"),male_lfpr = lfpr),c("GEOID","year","male_lfpr"))) %>%
   select(-c(Name,sex.x,sex.y)) %>% 
   filter(!is.na(lfpr))
 
@@ -668,12 +679,13 @@ data_reg_minorities = emp_seattle_minorities %>%
   left_join(filter(hours_sex, sex =="f"), by = c("GEOID", "year")) %>% 
   mutate(hours_per_capita =estimate_hoursworked/estimate_total) %>% 
   left_join(unemp_seattle_men, by = c("GEOID","year")) %>% 
-  #left_join(select(rename(filter(st_drop_geometry(emp_seattle), sex == "m"),male_lfpr = lfpr),c("GEOID","year","male_lfpr"))) %>%
   select(-c(Name,sex.x,sex.y)) %>% 
   filter(!is.na(lfpr)) %>% 
   mutate(lfpr = ifelse(has_station_p1==FALSE & year==2008,lfpr - 0.03,lfpr))
 
-### Prep Data to show D-in-D trend lines
+###-------------------------------------------------
+#- Prepare Data to Plot Diff-in-Diff Time Trends
+###-------------------------------------------------
 
 dind_plot_data = data_reg1 %>% 
   ungroup() %>%
@@ -713,13 +725,13 @@ plot_hours_seattle = ggplot(data = data_reg1, aes(year,hours_per_capita,color = 
 # Combine both plots into 1 image
 grid.arrange(plot_lfpr_seattle,plot_hours_seattle)
 
-###
-### Dynamic D-IN-D REGRESSION
-###
+###-------------------------------------------------
+#- Perform Dynamic Diff-in-Diff Regressions
+###-------------------------------------------------
 
 data_dynamic_reg = data_reg1 %>%
   mutate(after_open = ifelse(year>=2010,TRUE,FALSE),
-         treatment_year = ifelse(has_station_p1 == TRUE,2010,0)) %>% #ifelse(has_station_p2 == TRUE, 2016,0))) %>% 
+         treatment_year = ifelse(has_station_p1 == TRUE,2010,0)) %>% 
   mutate(log_hours = log(hours_per_capita)) %>%
   filter(!is.na(lfpr)) %>% 
   as.data.table() 
@@ -745,7 +757,7 @@ dynamic_dind_hours = feols(log_hours ~ i(time_to_treat, has_station_p1, ref = -2
 # Same as above but for seniors
 data_dynamic_seniors = data_reg_seniors %>%
   mutate(after_open = ifelse(year>=2010,TRUE,FALSE),
-         treatment_year = ifelse(has_station_p1 == TRUE,2010,0)) %>% #ifelse(has_station_p2 == TRUE, 2016,0))) %>% 
+         treatment_year = ifelse(has_station_p1 == TRUE,2010,0)) %>% 
   filter(!is.na(lfpr)) %>%
   mutate(log_hours = log(hours_per_capita)) %>% 
   as.data.table() 
@@ -761,7 +773,7 @@ dynamic_dind_lfpr_seniors = feols(lfpr ~ i(time_to_treat, has_station_p1, ref = 
 # Same for above except for non-white population
 data_dynamic_minorities = data_reg_minorities %>%
   mutate(after_open = ifelse(year>=2010,TRUE,FALSE),
-         treatment_year = ifelse(has_station_p1 == TRUE,2010,0)) %>% #ifelse(has_station_p2 == TRUE, 2016,0))) %>% 
+         treatment_year = ifelse(has_station_p1 == TRUE,2010,0)) %>% 
   filter(!is.na(lfpr)) %>%
   mutate(log_hours = log(hours_per_capita)) %>% 
   as.data.table() 
@@ -812,10 +824,11 @@ stargazer(
 
 etable(list(dynamic_dind_lfpr, dynamic_dind_hours,dynamic_dind_lfpr_seniors,dynamic_dind_lfpr_minorities), tex=TRUE)
 
-
-###
-### THE FOLLOWING SECTION IS THE CODE FOR COMPARING ACROSS DIFFERENT MSAs
-###
+###-------------------------------------------------
+#- Repeat Process for Inter-MSA Analysis
+#-
+#- Begin Loading 1-Y ACS Data and Spatial MSA Data
+###-------------------------------------------------
 
 # Read popluation data for MSAs
 msa_pop = read_csv("msa_population.csv",col_names = TRUE) %>% 
@@ -829,7 +842,7 @@ our_msas = msa %>%
          Gen >= 2) %>% 
   select(-c(CSAFP_1,GEOID_1,Shape_Leng,Shape_Area,SOURCE,SOURCEDATE,CSAFP_1,SYS_AGENCY,STATIONURL,STATIONSYS))
 
-# Load Female LFPR by sex and age for all MSA states that have transit
+# Load Female LFPR by sex and age for all MSA states that have transit, by PUMA
 lfs_acs_raw = acs1_puma_pull(lf_vars_byagesex,2005,2019,c(unique(our_msas$STATEFIP)),puma_crosswalk)
 lfs_acs = lfs_acs_raw %>% 
   mutate(inorout = if_else(grepl("ni",variable),"nilf","lf"),
@@ -849,7 +862,7 @@ lfs_acs = lfs_acs_raw %>%
     lfpr = estimate_lf/(estimate_lf+estimate_nilf)
   )
 
-# Load male UE for all MSA states
+# Load male UE for all MSA states, by PUMA
 raw_unemp_men_msa = acs1_puma_pull(unemp_vars_men,2005,2019,c(unique(our_msas$STATEFIP)),puma_crosswalk)
 unemp_men_msa = raw_unemp_men_msa %>% 
   mutate(inorout = if_else(grepl("unemp",variable),"unemp","lf"),
@@ -920,7 +933,11 @@ median_household_income = median_household_income_raw %>%
          moe_hh_income = moe)
 
 
-### Filter all data so it only contains PUMAs in our MSAs of interest
+###-------------------------------------------------
+#- Clean and Filter Data for MSA Analysis
+###-------------------------------------------------
+
+# Consolidate ACS LF data and bind it to our MSAs
 lfs_msa = lfs_acs %>%
   group_by(GEOID,year,sex) %>% 
   summarise(
@@ -936,11 +953,12 @@ lfs_msa = lfs_acs %>%
   select(!c(PUMA)) %>% 
   st_sf(sf_column_name = "geometry")
 
+# Add indicator variables, control variables, and clean data
 data_msa = lfs_msa %>% 
   st_drop_geometry() %>%
   filter(sex == "f") %>% 
-  mutate(is_seattle = grepl("Seattle",NAME_1),
-         after_open = ifelse(year>2009,TRUE,FALSE),
+  mutate(is_seattle = grepl("Seattle",NAME_1), #Add Seattle indicator variable
+         after_open = ifelse(year>2009,TRUE,FALSE), #indicator var that =1 if Link L.R. already built 
          open_X_seattle = ifelse(year>2009 & is_seattle == TRUE,TRUE,FALSE)) %>%
   left_join(filter(marriage_acs,sex=="f"), by = c("GEOID", "year")) %>% 
   left_join(filter(education_acs,sex=="f"), by = c("GEOID", "year")) %>% 
@@ -958,11 +976,9 @@ data_msa = lfs_msa %>%
   mutate(hours_per_capita = ifelse(is_seattle==FALSE & year==2005,log_hours + 0,log_hours)) %>% 
   mutate(hours_per_capita = ifelse(is_seattle==FALSE & year==2008,log_hours + 0,log_hours))
 
-data_msa_1 = data_msa %>% 
-  ungroup() %>% 
-  mutate(lf = ifelse(is_seattle == FALSE & year == 2007,lf, lf*0.95))
-
-### Compare labor force outcomes between Seattle and other MSAs over time
+###---------------------------------------------------------
+#- Graph LF Trends overtime between Seattle and other MSAs
+###---------------------------------------------------------
 
 msa_graph_data = data_msa %>% 
   ungroup() %>% 
@@ -988,7 +1004,9 @@ ggplot(data = msa_graph_data, aes(year,lfpr,color = is_seattle)) +
            hjust = -0.1) +
   theme_minimal()
 
-### Perform same dynamic D-in-D regressions as before, but now between seattle and other transit MSAs
+###-------------------------------------------------
+#- Perform Dynamic D-in-D for MSAs for 
+###-------------------------------------------------
 
   data_dynamic_msa = data_msa %>%
   mutate(after_open = ifelse(year>=2010,TRUE,FALSE),
@@ -1008,42 +1026,49 @@ data_dynamic_msa_2 = data_dynamic_msa %>%
 data_dynamic_msa_3 = data_dynamic_msa %>% 
   filter(gen3 == TRUE)
 
+# Comparing Female LFPR between all relevant MSAs
 dynamic_dind_msa_lfpr = feols(lfpr ~ i(time_to_treat, is_seattle, ref = -2) + ## Our key interaction: time × treatment status
 		  perc_college + perc_married + perc_with_children + unemp_rate |                    ## Other controls
 		  CBSAFP + year,                             ## FEs
 		 cluster = ~CSAFP,                          ## Clustered SEs
 		 data = data_dynamic_msa)
 
+# Compating Female Avg Hr Worked between all relevant MSAs
 dynamic_dind_msa_hours = feols(log_hours ~ i(time_to_treat, is_seattle, ref = -2) + ## Our key interaction: time × treatment status
 		  perc_college + perc_married + perc_with_children + unemp_rate|                    ## Other controls
 		  CBSAFP + year,                             ## FEs
 		 cluster = ~CSAFP,                          ## Clustered SEs
 		 data = data_dynamic_msa)
 
-
+# Comparing LFPR between Seattle and only MSAs with 2nd Gen Rapid Transit
 dynamic_dind_msa_lfpr_2 = feols(lfpr ~ i(time_to_treat, is_seattle, ref = -2) + ## Our key interaction: time × treatment status
 		  perc_college + perc_married + perc_with_children + unemp_rate |                    ## Other controls
 		  CBSAFP + year,                             ## FEs
 		 cluster = ~CSAFP,                          ## Clustered SEs
 		 data = data_dynamic_msa_2)
 
+# Comparing Avg Hr Worked for 2nd Gen MSA's
 dynamic_dind_msa_hours_2 = feols(log_hours ~ i(time_to_treat, is_seattle, ref = -2) + ## Our key interaction: time × treatment status
 		  perc_college + perc_married + perc_with_children + unemp_rate|                    ## Other controls
 		  CBSAFP + year,                             ## FEs
 		 cluster = ~CSAFP,                          ## Clustered SEs
 		 data = data_dynamic_msa_2)
 
+# Comparing LFPR to only 3rd gen rapid transit MSAs 
 dynamic_dind_msa_lfpr_3 = feols(lfpr ~ i(time_to_treat, is_seattle, ref = -2) + ## Our key interaction: time × treatment status
 		  perc_college + perc_married + perc_with_children + unemp_rate |                    ## Other controls
 		  CBSAFP + year,                             ## FEs
 		 cluster = ~CSAFP,                          ## Clustered SEs
 		 data = data_dynamic_msa_3)
 
+# Avg Hrs Worked between Gen 3 MSAs
 dynamic_dind_msa_hours_3 = feols(log_hours ~ i(time_to_treat, is_seattle, ref = -2) + ## Our key interaction: time × treatment status
 		  perc_college + perc_married + perc_with_children + unemp_rate|                    ## Other controls
 		  CBSAFP + year,                             ## FEs
 		 cluster = ~CSAFP,                          ## Clustered SEs
 		 data = data_dynamic_msa_3)
+
+### Plot all results seperately, then combine into a grid
 
 xall1  = ggiplot(dynamic_dind_msa_lfpr,geom_style = 'errorbar') + 
   labs(title = 'Female Labor Force \nParticipation Rate - Gen 2+3')  + 
@@ -1084,6 +1109,7 @@ x32 = ggiplot(dynamic_dind_msa_hours_3, geom_style = 'errorbar') +
 figurexall = grid.arrange(xall1,xall2)
 figurexgen = grid.arrange(x21,x31,x22,x32)
 
+# Generate regresion table for all lf/gen combos
 etable(list(dynamic_dind_msa_lfpr,
             dynamic_dind_msa_lfpr_2,
             dynamic_dind_msa_lfpr_3,
