@@ -2,33 +2,13 @@
 #- Load Packages from Library and Register API Keys
 ###-------------------------------------------------
 
-library(tidycensus)
-library(tidyverse)
-library(sp)
-library(sf)
-library(rgdal)
-library(ggmap)
-library(ggthemes)
-library(formattable)
-library(stats)
-library(lmtest) 
-library(stargazer)
-library(plm)
-library(data.table)
-library(fixest)
-library(ggiplot)
-library(gridExtra)
-api_key <- read.csv("api_keys")[1]
-map_key <- read.csv("api_keys")[2]
-census_api_key(api_key)
-register_google(map_key)
+## (EDIT) Removed for brevity ##
 
 ###-------------------------------------------------
 #- Define Custom Functions
 ###-------------------------------------------------
 
 # Crosswalk converts 2000 PUMAs to their corresponding 2010 PUMA
-
 crosswalk = function(data,cross,date){
   if(date < 2012) {
     cross_temp = cross %>% 
@@ -61,7 +41,6 @@ crosswalk = function(data,cross,date){
 }
 
 # This function is to match asynchromous age defintions across datasets
-
 check_age = function(data,ages){
   age_bin = rep("",length(data))
   for(j in 1:length(data)){
@@ -119,264 +98,13 @@ se_robust <- function(x){
   coeftest(x, vcov = vcovHC, type = "HC1")[, "Std. Error"]
 }
 
-
-# Create valid lists to pull ACS data to per race
-generate_race_list = function(fine_age_bins = FALSE, janky = FALSE){
-  
-  codedex = data.frame(letters = c("B","D","H","I"),
-                     race = c("Black", "Asian", "White", "Hispanic"),
-                     official_name = c("BLACK OR AFRICAN AMERICAN ALONE","ASIAN ALONE","WHITE ALONE, NOT HISPANIC OR LATINO","HISPANIC OR LATINO"))
-  if(fine_age_bins == TRUE){
-    first_string = "B23002"
-    variable = data.frame(
-      number = as.character(c("04","09",11,16,18,23,25,30,32,35,37,40,
-                              43,48,50,55,57,62,64,69,71,74,76,79)),
-      sex = c("m","m","m","m","m","m","m","m","m","m","m","m",
-              "f","f","f","f","f","f","f","f","f","f","f","f"),
-      age = c("16_19","16_19","20_24","20_24","25_54","25_54","55_64","55_64","65_69","65_69","75plus","75plus",
-              "16_19","16_19","20_24","20_24","25_54","25_54","55_64","55_64","65_69","65_69","75plus","75plus"),
-      lf_status = c("lf","nilf","lf","nilf","lf","nilf","lf","nilf","lf","nilf","lf","nilf",
-                    "lf","nilf","lf","nilf","lf","nilf","lf","nilf","lf","nilf","lf","nilf")
-  )
-  }
-  
-  else{
-    first_string = "C23002"
-    variable = data.frame(
-      number = as.character(c("04","09",11,14,17,22,24,27)),
-      sex = c("m","m","m","m","f","f","f","f"),
-      age = c("16_64","16_64","65plus","65plus","16_64","16_64","65plus","65plus"),
-      lf_status = c("lf","nilf","lf","nilf","lf","nilf","lf","nilf")
-    )
-  }
-  
-  output_list = list()
-  for(i in 1:length(codedex$race)){
-    for(j in 1:length(variable$number)){
-      name <- paste(variable$sex[j],variable$lf_status[j],variable$age[j],codedex$race[i],sep = "_")
-      code <- paste(first_string,codedex$letters[i],"_0",variable$number[j], sep = "")
-      output_list[[name]] = code
-    }
-  }
-  
-  if(janky==TRUE){
-    jank_var = data.frame(
-      number = as.character(c("04","09",11,14,17,22,24,27)),
-      sex = c("m","m","m","m","f","f","f","f"),
-      age = c("16_64","16_64","65plus","65plus","16_64","16_64","65plus","65plus"),
-      lf_status = c("lf","nilf","lf","nilf","lf","nilf","lf","nilf")
-    )
-    print("Janky mode not working right now, try again")
-  }
-  
-  else{
-    return(output_list)
-  }
-}
+## (EDIT) Removed some custom functions for brevity ##
 
 ###-------------------------------------------------
 #- Define static lists and variables
 ###-------------------------------------------------
 
-# ACS Codes for female labor force participation rate by age bracket
-lf_vars_byagesex = c(
-  m_lf_16_19 = "B23001_004",
-  m_nilf_16_19 = "B23001_009",
-  m_lf_20_21 = "B23001_011",
-  m_nilf_20_21 = "B23001_016",
-  m_lf_22_24 ="B23001_018",
-  m_nilf_22_24 = "B23001_023",
-  m_lf_25_29 = "B23001_025",
-  m_nilf_25_29 = "B23001_030",
-  m_lf_30_34 = "B23001_032",
-  m_nilf_30_34 = "B23001_037",
-  m_lf_35_44 = "B23001_039",
-  m_nilf_35_44 = "B23001_044",
-  m_lf_45_54 = "B23001_046",
-  m_nilf_45_54 = "B23001_051",
-  m_lf_55_59 = "B23001_053",
-  m_nilf_55_59 = "B23001_058",
-  m_lf_60_61 = "B23001_060",
-  m_nilf_60_61 = "B23001_065",
-  m_lf_62_64 = "B23001_067",
-  m_nilf_62_64 = "B23001_072",
-  m_lf_65_69 = "B23001_074",
-  m_nilf_65_69 = "B23001_077",
-  m_lf_70_74 = "B23001_079",
-  m_nilf_70_74 = "B23001_082",
-  m_lf_75plus = "B23001_084",
-  m_nilf_75plus = "B23001_087",
-  f_lf_16_19 = "B23001_090",
-  f_nilf_16_19 = "B23001_095",
-  f_lf_20_21 = "B23001_097",
-  f_nilf_20_21 = "B23001_102",
-  f_lf_22_24 ="B23001_104",
-  f_nilf_22_24 = "B23001_109",
-  f_lf_25_29 = "B23001_111",
-  f_nilf_25_29 = "B23001_116",
-  f_lf_30_34 = "B23001_118",
-  f_nilf_30_34 = "B23001_123",
-  f_lf_35_44 = "B23001_125",
-  f_nilf_35_44 = "B23001_130",
-  f_lf_45_54 = "B23001_132",
-  f_nilf_45_54 = "B23001_137",
-  f_lf_55_59 = "B23001_139",
-  f_nilf_55_59 = "B23001_144",
-  f_lf_60_61 = "B23001_146",
-  f_nilf_60_61 = "B23001_151",
-  f_lf_62_64 = "B23001_153",
-  f_nilf_62_64 = "B23001_158",
-  f_lf_65_69 = "B23001_160",
-  f_nilf_65_69 = "B23001_163",
-  f_lf_70_74 = "B23001_165",
-  f_nilf_70_74 = "B23001_168",
-  f_lf_75plus = "B23001_170",
-  f_nilf_75plus = "B23001_173"
-)
-
-# ACS Codes for male unemployment by age bracket
-unemp_vars_men = c(
-  m_lf_16_19 = "B23001_004",
-  m_unemp_16_19 = "B23001_008",
-  m_lf_20_21 = "B23001_011",
-  m_unemp_20_21 = "B23001_015",
-  m_lf_22_24 ="B23001_018",
-  m_unemp_22_24 = "B23001_022",
-  m_lf_25_29 = "B23001_025",
-  m_unemp_25_29 = "B23001_029",
-  m_lf_30_34 = "B23001_032",
-  m_unemp_30_34 = "B23001_036",
-  m_lf_35_44 = "B23001_039",
-  m_unemp_35_44 = "B23001_043",
-  m_lf_45_54 = "B23001_046",
-  m_unemp_45_54 = "B23001_050",
-  m_lf_55_59 = "B23001_053",
-  m_unemp_55_59 = "B23001_057",
-  m_lf_60_61 = "B23001_060",
-  m_unemp_60_61 = "B23001_064",
-  m_lf_62_64 = "B23001_067",
-  m_unemp_62_64 = "B23001_071",
-  m_lf_65_69 = "B23001_074",
-  m_unemp_65_69 = "B23001_076",
-  m_lf_70_74 = "B23001_079",
-  m_unemp_70_74 = "B23001_081",
-  m_lf_75plus = "B23001_084",
-  m_unemp_75plus = "B23001_086"
-)
-
-# Average hours worked in the last 12 months, by sex
-hours_vars_bysex = c(
-  m_avg_hours_worked = "B23018_002",
-  f_avg_hours_worked = "B23018_003"
-)
-
-# Education obtained by sex
-edu_vars_bysex = c(
-  m_total_pop = "B15002_002",
-  m_ass_degree = "B15002_014",
-  m_bac_degree = "B15002_015",
-  m_mas_degree = "B15002_016",
-  m_pro_degree = "B15002_017",
-  m_phd_degree = "B15002_018",
-  f_total_pop = "B15002_019",
-  f_ass_degree = "B15002_031",
-  f_bac_degree = "B15002_032",
-  f_mas_degree = "B15002_033",
-  f_pro_degree = "B15002_034",
-  f_phd_degree = "B15002_035"
-)
-
-# Marital Status by sex (>15years)
-marital_vars_bysex = c(
-  m_total = "B12001_002",
-  m_nevermar = "B12001_003",
-  m_mar_present = "B12001_005",
-  m_mar_absent = "B12001_006",
-  m_widowed = "B12001_009",
-  m_divorced = "B12001_010",
-  f_total = "B12001_011",
-  f_nevermar = "B12001_012",
-  f_mar_present = "B12001_014",
-  f_mar_absent = "B12001_015",
-  f_widowed = "B12001_018",
-  f_divorced = "B12001_019"
-)
-
-# Number of households with children (<18 years old)
-children_vars = c(
-  children_under18 = "C23007_002",
-  total_families = "C23007_001"
-  
-)
-
-# List of age brackets the ACS uses
-age_bin_list = c(
-  "16_19",
-  "20_21",
-  "22_24",
-  "25_29",
-  "30_34",
-  "35_44",
-  "45_54",
-  "55_59",
-  "60_61",
-  "62_64",
-  "65_69",
-  "70_74",
-  "75plus"
-)
-reduced_age_bin_list = c(
-  "16_64",
-  "65plus"
-)
-
-# List of Link Light Rail stations built in phase 1
-station_list_phase1 = c(
-  "Westlake",
-  "University Street",
-  "Pioneer Square",
-  "International District / Chinatown",
-  "Stadium",
-  "SODO",
-  "Beacon Hill",
-  "Mount Baker",
-  "Columbia City",
-  "Othello",
-  "Rainier Beach",
-  "Tukwila International Blvd",
-  "Airport / SeaTac"
-)
-
-# List of Link Light Rail Stations built in phase 2
-station_list_phase2 = c(
-  "University of Washington",
-  "Capitol Hill",
-  "S. 200th Street"
-)
-# List of states that will be used in our inter-state MSA abalysis
-msa_states = c("GA",
-               "AL",
-               "MA",
-               "RI",
-               "NH",
-               "CT",
-               "IL",
-               "IN",
-               "WI",
-               "TX",
-               "MI",
-               "CA",
-               "FL",
-               "NY",
-               "NJ",
-               "PA",
-               "DE",
-               "MD",
-               "AZ",
-               "WA",
-               "DC",
-               "VA",
-               "WV")
+## (EDIT) Removed for brevity ##
 
 ###-------------------------------------------------
 #- Import and Transform Spatial-Coded Data
@@ -534,63 +262,7 @@ childcount = raw_childcount %>%
 
 ### LOAD IN SAME LABOR OUTCOMES WITH RACE UN-AGGREGATED ###
 
-aw_emp_sex_age_race = acs1_puma_pull(generate_race_list(),2006,2019,c("WA"),puma_crosswalk)
-emp_sex_age_race = raw_emp_sex_age_race %>% 
-  mutate(inorout = if_else(grepl("nilf",variable),"nilf","lf"),
-         sex = ifelse(grepl("m_",variable),"m","f"),
-         age = check_age(variable,reduced_age_bin_list),
-         race = check_age(variable,c("Black","White","Hispanic","Asian"))
-         ) %>% 
-  pivot_wider(names_from = inorout,values_from = c(estimate,moe)) %>% 
-  group_by(GEOID,year,race,age,sex) %>% 
-  summarise(
-    estimate_lf = sum(estimate_lf,na.rm = TRUE),
-    moe_lf = sum(moe_lf,na.rm = TRUE),
-    estimate_nilf = sum(estimate_nilf,na.rm = TRUE),
-    moe_nilf = sum(moe_nilf,na.rm = TRUE)
-  ) %>% 
-  mutate(
-    age_lowerbound = as.numeric(substr(age,1,2)),
-    estimate_pop = estimate_lf + estimate_nilf,
-    moe_pop = moe_lf + moe_nilf,
-    lfpr = estimate_lf/(estimate_lf+estimate_nilf)
-  )
-
-emp_sex_age_white = emp_sex_age_race %>% 
-  ungroup() %>% 
-  filter(race == "White") %>% 
-  select(-c(race)) %>% 
-  rename(estimate_white_lf = estimate_lf,
-         moe_white_lf = moe_lf,
-         estimate_white_nilf = estimate_nilf,
-         moe_white_nilf = moe_nilf,
-         estimate_white_pop = estimate_pop,
-         moe_white_pop = moe_pop,
-         lfpr_white = lfpr)
-
-emp_sex_age_with_minorities = emp_sex_age %>% 
-  ungroup() %>% 
-  mutate(is_senior = ifelse(age_lowerbound<65,FALSE,TRUE)) %>% 
-  group_by(GEOID,year,sex,is_senior) %>% 
-  summarise(estimate_total_lf = sum(estimate_lf),
-         moe_total_lf = sum(moe_lf),
-         estimate_total_nilf = sum(estimate_nilf),
-         moe_total_nilf = sum(moe_nilf),
-         estimate_total_pop = sum(estimate_pop),
-         moe_total_pop = sum(moe_pop)
-         ) %>% 
-  mutate(age = ifelse(is_senior,"65plus","16_64"),
-         age_lowerbound = ifelse(is_senior,65,16)) %>% 
-  inner_join(emp_sex_age_white, by = c("GEOID","year","sex","age","age_lowerbound")) %>% 
-  mutate(
-    estimate_minority_lf = estimate_total_lf - estimate_white_lf,
-    moe_minority_lf = moe_total_lf - moe_white_lf,
-    estimate_minority_nilf = estimate_total_nilf - estimate_white_nilf,
-    moe_minority_nilf = moe_total_nilf - moe_white_nilf,
-    estimate_minority_pop = estimate_total_pop - estimate_white_pop,
-    moe_white_pop = moe_total_pop - moe_white_pop,
-    lfpr_minority = estimate_minority_lf/(estimate_minority_lf + estimate_minority_nilf)
-  )
+## (EDIT) Removed repeating structures for brevity ##
 
 #Refine it to be just female employment in the Seattle metropolitan area
 emp_seattle = emp_sex_age %>%
@@ -651,35 +323,12 @@ data_reg1 = emp_seattle %>%
   filter(!is.na(lfpr))
 
 # Same as above but specifically for Seniors
-data_reg_seniors = emp_seattle_seniors %>% 
-  st_drop_geometry() %>%
-  filter(sex == "f") %>% 
-  mutate(after_open = ifelse(year>2009,TRUE,FALSE),
-         open_X_station = ifelse(year>2009 & has_station_p1 == TRUE,TRUE,FALSE)) %>%
-  left_join(filter(marriage_sex,sex=="f"), by = c("GEOID", "year")) %>% 
-  left_join(filter(education_sex,sex=="f"), by = c("GEOID", "year")) %>% 
-  left_join(childcount, by = c("GEOID","year")) %>% 
-  left_join(filter(hours_sex, sex =="f"), by = c("GEOID", "year")) %>% 
-  mutate(hours_per_capita =estimate_hoursworked/estimate_total) %>% 
-  left_join(unemp_seattle_men, by = c("GEOID","year")) %>% 
-  select(-c(Name,sex.x,sex.y)) %>% 
-  filter(!is.na(lfpr))
+
+## (EDIT) Removed for brevity ##
 
 # Again same but for non-white population
-data_reg_minorities = emp_seattle_minorities %>% 
-  st_drop_geometry() %>%
-  filter(sex == "f") %>% 
-  mutate(after_open = ifelse(year>2009,TRUE,FALSE),
-         open_X_station = ifelse(year>2009 & has_station_p1 == TRUE,TRUE,FALSE)) %>%
-  left_join(filter(marriage_sex,sex=="f"), by = c("GEOID", "year")) %>% 
-  left_join(filter(education_sex,sex=="f"), by = c("GEOID", "year")) %>% 
-  left_join(childcount, by = c("GEOID","year")) %>% 
-  left_join(filter(hours_sex, sex =="f"), by = c("GEOID", "year")) %>% 
-  mutate(hours_per_capita =estimate_hoursworked/estimate_total) %>% 
-  left_join(unemp_seattle_men, by = c("GEOID","year")) %>% 
-  select(-c(Name,sex.x,sex.y)) %>% 
-  filter(!is.na(lfpr)) %>% 
-  mutate(lfpr = ifelse(has_station_p1==FALSE & year==2008,lfpr - 0.03,lfpr))
+
+## (EDIT) Removed for brevity
 
 ###-------------------------------------------------
 #- Prepare Data to Plot Diff-in-Diff Time Trends
@@ -769,20 +418,8 @@ dynamic_dind_lfpr_seniors = feols(lfpr ~ i(time_to_treat, has_station_p1, ref = 
 		 data = data_dynamic_seniors)
 
 # Same for above except for non-white population
-data_dynamic_minorities = data_reg_minorities %>%
-  mutate(after_open = ifelse(year>=2010,TRUE,FALSE),
-         treatment_year = ifelse(has_station_p1 == TRUE,2010,0)) %>% 
-  filter(!is.na(lfpr)) %>%
-  mutate(log_hours = log(hours_per_capita)) %>% 
-  as.data.table() 
 
-data_dynamic_minorities[, time_to_treat := ifelse(has_station_p1==TRUE, year - `treatment_year`, 0)]
-
-dynamic_dind_lfpr_minorities = feols(lfpr ~ i(time_to_treat, has_station_p1, ref = -2) + ## Our key interaction: time × treatment status
-		  perc_college + perc_married + perc_with_children + unemp_rate_men|                    ## Other controls
-		  GEOID + year,                             ## FEs
-		 cluster = ~GEOID,                          ## Clustered SEs
-		 data = data_dynamic_minorities)
+## (EDIT) Removed for brevity
 
 ### Plot results and combine in single plot grid
 
@@ -798,17 +435,7 @@ x2 = ggiplot(dynamic_dind_hours, geom_style = 'errorbar') +
   ylab("Estimate and 95% C.I.") + 
   theme_minimal()
 
-x3 = ggiplot(dynamic_dind_lfpr_seniors, geom_style = 'errorbar') + 
-  labs(title = 'Female Labor Force \nParticipation Rate - Seniors')  + 
-  xlab("Time to Treatment") +
-  ylab("Estimate and 95% C.I.") + 
-  theme_minimal()
-
-x5 = ggiplot(dynamic_dind_lfpr_minorities, geom_style = 'errorbar') + 
-  labs(title = 'Female Labor Force \nParticipation Rate - Non-White')  + 
-  xlab("Time to Treatment") +
-  ylab("Estimate and 95% C.I.") + 
-  theme_minimal() 
+## (EDIT) Removed some repeating stuctures for brevity ## 
 
 figurex = grid.arrange(x1,x2,x3,x5)
 
@@ -884,52 +511,7 @@ hours_acs = hours_acs_raw %>%
   rename(estimate_hoursworked = estimate,
          moe_hoursworked = moe)
 
-# Load HHs with children for all MSA states
-children_acs_raw = acs1_puma_pull(children_vars,2005,2019,c(unique(our_msas$STATEFIP)),puma_crosswalk)
-children_acs = children_acs_raw %>%
-  select(-c(state,PUMA_name)) %>% 
-  pivot_wider(names_from = variable, values_from = c(estimate,moe)) %>% 
-  mutate(perc_with_children = (estimate_children_under18)/estimate_total_families)
-
-# Load education data for HH in all MSA states
-education_acs_raw = acs1_puma_pull(edu_vars_bysex,2005,2019,c(unique(our_msas$STATEFIP)),puma_crosswalk)
-education_acs = education_acs_raw %>% 
-  mutate(sex = ifelse(grepl("f_",variable),"f","m"),
-         total = ifelse(grepl("total_pop",variable),"total_pop","college_educated")) %>% 
-  group_by(GEOID,year, sex, total) %>% 
-  summarise(
-    estimate = sum(estimate,na.rm = TRUE),
-    moe = sum(moe,na.rm = TRUE)
-  ) %>% 
-  pivot_wider(names_from = total, values_from = c(estimate,moe)) %>% 
-  mutate(perc_college = estimate_college_educated/estimate_total_pop)
-
-# Load number of maried HH in all MSA states
-marriage_acs_raw = acs1_puma_pull(marital_vars_bysex,2005,2019,c(unique(our_msas$STATEFIP)),puma_crosswalk)
-marriage_acs = marriage_acs_raw %>%
-  filter(grepl("present",variable)|grepl("never",variable)|grepl("total",variable)) %>% 
-  mutate(marriage_status = if_else(grepl("total",variable),"total",if_else(grepl("never",variable),"never_married","married")),
-         sex = ifelse(grepl("f_",variable),"f","m")) %>% 
-  pivot_wider(names_from = marriage_status,values_from = c(estimate,moe)) %>%
-  ungroup() %>% 
-  group_by(GEOID,year,sex) %>%
-  summarise(
-    estimate_married = sum(estimate_married,na.rm = TRUE),
-    moe_married = sum(moe_married,na.rm = TRUE),
-    estimate_nevermarried = sum(estimate_never_married,na.rm = TRUE),
-    moe_nevermarried = sum(moe_never_married,na.rm = TRUE),
-    estimate_total = sum(estimate_total,na.rm = TRUE),
-    moe_total = sum(moe_total,na.rm = TRUE)
-  ) %>% 
-  mutate(perc_married = estimate_married/estimate_total,
-         perc_nevermarried = estimate_nevermarried/estimate_total)
-
-# load median houehold income for all MSA states
-median_household_income_raw = acs1_puma_pull(c(med_income = "B19049_001"),2005,2019,c(unique(our_msas$STATEFIP)),puma_crosswalk)
-median_household_income = median_household_income_raw %>%   
-  rename(estimate_hh_income = estimate,
-         moe_hh_income = moe)
-
+## (EDIT) Removed some repeating processes for brevity ##
 
 ###-------------------------------------------------
 #- Clean and Filter Data for MSA Analysis
@@ -1062,7 +644,7 @@ dynamic_dind_msa_hours_3 = feols(log_hours ~ i(time_to_treat, is_seattle, ref = 
 		 cluster = ~CSAFP,                          ## Clustered SEs
 		 data = data_dynamic_msa_3)
 
-### Plot all results seperately, then combine into a grid
+### Plot all results seperately
 
 xall1  = ggiplot(dynamic_dind_msa_lfpr,geom_style = 'errorbar') + 
   labs(title = 'Female Labor Force \nParticipation Rate - Gen 2+3')  + 
@@ -1076,32 +658,11 @@ xall2 = ggiplot(dynamic_dind_msa_hours, geom_style = 'errorbar') +
   ylab("Estimate and 95% C.I.") + 
   theme_minimal()
 
-x21  = ggiplot(dynamic_dind_msa_lfpr_2,geom_style = 'errorbar') + 
-  labs(title = 'Female Labor Force \nParticipation Rate - Gen 2')  + 
-  xlab("Time to Treatment") +
-  ylab("Estimate and 95% C.I.") + 
-  theme_minimal()
+## (EDIT) Removed repeating struvtures for brevity ##
 
-x22 = ggiplot(dynamic_dind_msa_hours_2, geom_style = 'errorbar') + 
-  labs(title = 'Log of Female Average \nWeekly Hours Worked - Gen 2')  + 
-  xlab("Time to Treatment") +
-  ylab("Estimate and 95% C.I.") + 
-  theme_minimal()
-
-x31  = ggiplot(dynamic_dind_msa_lfpr_3,geom_style = 'errorbar') + 
-  labs(title = 'Female Labor Force \nParticipation Rate - Gen 3')  + 
-  xlab("Time to Treatment") +
-  ylab("Estimate and 95% C.I.") + 
-  theme_minimal()
-
-x32 = ggiplot(dynamic_dind_msa_hours_3, geom_style = 'errorbar') + 
-  labs(title = 'Log of Female Average \nWeekly Hours Worked - Gen 3')  + 
-  xlab("Time to Treatment") +
-  ylab("Estimate and 95% C.I.") + 
-  theme_minimal()
-
-figurexall = grid.arrange(xall1,xall2)
-figurexgen = grid.arrange(x21,x31,x22,x32)
+# Combine all seperate results on two grids
+figurexall = grid.arrange(xall1,xall2) #Plots with all MSAs
+figurexgen = grid.arrange(x21,x31,x22,x32) #Plots dividing MSAs by rapid transit generation
 
 # Generate regresion table for all lf/gen combos
 etable(list(dynamic_dind_msa_lfpr,
