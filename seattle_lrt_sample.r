@@ -2,7 +2,26 @@
 #- Load Packages from Library and Register API Keys
 ###-------------------------------------------------
 
-## (EDIT) Removed for brevity ##
+library(tidycensus)
+library(tidyverse)
+library(sp)
+library(sf)
+library(rgdal)
+library(ggmap)
+library(ggthemes)
+library(formattable)
+library(stats)
+library(lmtest)
+library(stargazer)
+library(plm)
+library(data.table)
+library(fixest)
+library(ggiplot)
+library(gridExtra)
+census_key <- read.csv("api_keys")[1]
+map_key <- read.csv("api_keys")[2]
+census_api_key(census_key)
+register_google(map_key)
 
 ###-------------------------------------------------
 #- Define Custom Functions
@@ -22,7 +41,7 @@ crosswalk = function(data,cross,date){
                 moe = sum(moe*pPUMA00_Pop10/100)) %>% 
       rename(GEOID = GEOID10)
     return(cross_temp)
-  }
+  } 
   else if(date >= 2012) {
     cross_temp = cross %>% 
       inner_join(data,by=c("GEOID10" = "GEOID")) %>% 
@@ -36,7 +55,7 @@ crosswalk = function(data,cross,date){
     return(cross_temp)
   }
   else{
-    return("Error, idk what tf is going on")
+    return("ERROR: I don't know how you did it, but something is incredibly wrong")
   }
 }
 
@@ -64,7 +83,7 @@ check_age = function(data,ages){
 }
 
 # Custom function to pull data from the Census
-acs1_puma_pull = function(codes,year_start,year_end,state,crosswalk_file,na_check = FALSE){
+acs1_puma_pull = function(codes, year_start, year_end, state, crosswalk_file, na_check = FALSE){
   acs_data = c()
   nacount = rep(0,year_end-year_start)
   for(i in year_start:year_end){

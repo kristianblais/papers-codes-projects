@@ -55,7 +55,7 @@ crosswalk = function(data,cross,date){
     return(cross_temp)
   }
   else{
-    return("Error, idk what tf is going on")
+    return("ERROR: I don't know how you did it, but something is incredibly wrong")
   }
 }
 
