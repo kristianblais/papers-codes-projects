@@ -5,7 +5,6 @@ import pandas as pd
 
 def distancematrix(origins, destinations, key, mode = "driving", as_matrix = True, as_text = True):
 
-    
     # Load origins in the proper string format "orig1|orig2|..."
     if isinstance(origins, list):
         origins_string = "|".join(origins)
@@ -30,17 +29,16 @@ def distancematrix(origins, destinations, key, mode = "driving", as_matrix = Tru
     origins_url = "origins=" + urllib.parse.quote(origins_string)
     destinations_url = "destinations=" + urllib.parse.quote(destinations_string)
     key_url =  "key=" + urllib.parse.quote(key)
-    
     if mode == "driving":
         mode_url = ''
     else:
-        mode_url =  '&mode=' + urllib.parse.quote(mode)
+        mode_url = '&mode=' + urllib.parse.quote(mode)
 
     # Paste strings together to format proper string
     url = f"https://maps.googleapis.com/maps/api/distancematrix/json?{origins_url}&{destinations_url}{mode_url}&{key_url}"
 
     # Initialize parameters for HTTP request
-    payload={}
+    payload = {}
     headers = {}
 
     # Request Distance Matrix from Google Maps API 
@@ -48,30 +46,33 @@ def distancematrix(origins, destinations, key, mode = "driving", as_matrix = Tru
     # Convert Matrix from JSON fromat to Python Dictionary
     OD_dict = json.loads(response.text)
     
+    # Iterate through dictionary to construct matrix dataframe
     if as_matrix:
+        # Load empty DataFame with column names
         matrix = pd.DataFrame(columns = ['Origin', 'Destination', 'Distance', 'Duration'])
-        i = 0
-        for orig in range(OD_dict['origin_addresses']):
-            for dest in range(OD_dict['destination_addresses']):
-                matrix.iloc[i]['Origin'] = OD_dict['origin_addresses'][orig]
-                matrix.iloc[i]['Destination'] = OD_dict['destination_addresses'][dest]
+
+        for orig in range(len(OD_dict['origin_addresses'])): # For every origin location
+            for dest in range(len(OD_dict['destination_addresses'])): # For every dest. location
+                obs_origin = OD_dict['origin_addresses'][orig] # Extract origin location
+                obs_destination = OD_dict['destination_addresses'][dest] # Extract dest. location
                 if as_text:
-                    matrix.iloc[i]['Distance'] = OD_dict['rows'][orig]['elements'][dest]['distance']['text']
-                    matrix.iloc[i]['Duration'] = OD_dict['rows'][orig]['elements'][dest]['duration']['text']
+                    obs_distance = OD_dict['rows'][orig]['elements'][dest]['distance']['text'] # Distance b/w O&D
+                    obs_time = OD_dict['rows'][orig]['elements'][dest]['duration']['text'] # Travel time b/w O&D
                 else:
-                    matrix.iloc[i]['Distance'] = OD_dict['rows'][orig]['elements'][dest]['distance']['value']
-                    matrix.iloc[i]['Duration'] = OD_dict['rows'][orig]['elements'][dest]['duration']['value']
-                    
+                    obs_distance = OD_dict['rows'][orig]['elements'][dest]['distance']['value']
+                    obs_time = OD_dict['rows'][orig]['elements'][dest]['duration']['value']
+               
+                # Append Origin, Destination, Distance, and Duration to O&D Matrix
+                matrix.loc[len(matrix.index)] = [obs_origin, obs_destination, obs_distance, obs_time]
     else:
         matrix = OD_dict
-
 
     return matrix
 
 with open('googlemaps_api_key.txt', 'r') as key_file:
     api_key = str(key_file.read().replace('\n', ''))
 
-origins = "Grand Central Station, New York"
-destinations = ["Harvard University", "Columbia University", "Yale University"]
+origins = "University of British Columbia|Simon Fraser University|Capilano University"
+destinations = ["Universtiy of Victoria", "University of Vancouver Island", "Royal Roads University", "Quest University Squamish"]
 
 test_matrix = distancematrix(origins, destinations, api_key)
