@@ -1,37 +1,15 @@
-from itertools import tee
+import requests
+import json
 
-import geopandas as gpd
-import googlemaps
-import pandas as pd
+with open('googlemaps_api_key.txt', 'r') as key_file:
+    api_key = str(key_file.read().replace('\n', ''))
 
-with open("api_keys/googlemaps_api_key.txt") as f:
-    API_key = f.read()
-gmaps = googlemaps.Client(key=API_key)
+origins = "40.6655101%2C-73.89188969999998"
+destinations = "40.659569%2C-73.933783%7C40.729029%2C-73.851524%7C40.6860072%2C-73.6334271%7C40.598566%2C-73.7527626"
+url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={origins}&destinations={destinations}&key={api_key}"
 
-census_tracts = gpd.GeoDataFrame.from_file("data/ct_2020.shp")
-census_tracts["x"] = gpd.GeoDataFrame.centroid.map(lambda p: p.x)
-census_tracts["y"] = gpd.GeoDataFrame.centroid.map(lambda p: p.y)
+payload={}
+headers = {}
 
-def pairwise(iterable):
-    a, b = tee(iterable)
-    next(b, None)
-    return zip(a, b)
-
-list = [0]
-
-for (i1, row1), (i2, row2) in pairwise(census_tracts.iterrows()):
-      #Assign latitude and longitude as origin/departure points
-      LatOrigin = row1['x'] 
-      LongOrigin = row1['y']
-      origins = (LatOrigin,LongOrigin)
-
-      #Assign latitude and longitude from the next row as the destination point
-      LatDest = row2['x'] 
-      LongDest = row2['y'] 
-      destination = (LatDest,LongDest)
-
-      #pass origin and destination variables to distance_matrix function# output in meters
-      result = gmaps.distance_matrix(origins, destination, mode='driving')["rows"][0]["elements"][0]["distance"]["value"]
-      
-      #append result to list
-      list.append(result)
+response = requests.request("GET", url, headers=headers, data=payload)
+matrix = json.loads(response.text)
